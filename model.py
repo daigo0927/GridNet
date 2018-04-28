@@ -37,7 +37,7 @@ class GridNet(nn.Module):
             else:
                 # row : descending order
                 for row in reversed(range(self.n_row-1)):
-                    outputs[row][col] += self.up_blocks[row][col-3](outputs[row+1][col])
+                    outputs[row][col] += self.up_blocks[row][col-int(self.n_col/2)](outputs[row+1][col])
             if col < self.n_col-1:
                 for row in range(self.n_row):
                     outputs[row][col+1] = self.lateral_blocks[row][col](outputs[row][col])
