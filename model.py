@@ -14,13 +14,25 @@ class GridNet(nn.Module):
         self.n_chs = n_chs
 
         self.lateral_init = LateralBlock(n_ch_init, n_chs[0])
-        self.lateral_blocks = [[LateralBlock(n_ch, n_ch) for _ in range(n_col-1)] for n_ch in n_chs]
-        self.down_blocks = [[DownSamplingBlock(ch_in, ch_out) \
-                             for _ in range(int(n_col/2))]
-                            for ch_in, ch_out in zip(n_chs[:-1], n_chs[1:])]
-        self.up_blocks = [[UpSamplingBlock(ch_in, ch_out) \
-                           for _ in range(int(n_col/2))]
-                          for ch_in, ch_out in zip(n_chs[1:], n_chs[:-1])]
+        
+        self.lateral_blocks = [[None for _ in range(n_col-1)] for _ in range(n_row)]
+        for r, n_ch in enumerate(n_chs):
+            for c in range(n_col-1):
+                setattr(self, f'lateral_{r}_{c}', LateralBlock(n_ch, n_ch))
+                self.lateral_blocks[r][c] = eval(f'self.lateral_{r}_{c}')
+
+        self.down_blocks = [[None for _ in range(int(n_col/2))] for _ in range(n_row-1)]
+        for r, (ch_in, ch_out) in enumerate(zip(n_chs[:-1], n_chs[1:])):
+            for c in range(int(n_col/2)):
+                setattr(self, f'down_{r}_{c}', DownSamplingBlock(ch_in, ch_out))
+                self.down_blocks[r][c] = eval(f'self.down_{r}_{c}')
+
+        self.up_blocks = [[None for _ in range(int(n_col/2))] for _ in range(n_row-1)]
+        for r, (ch_in, ch_out) in enumerate(zip(n_chs[1:], n_chs[:-1])):
+            for c in range(int(n_col/2)):
+                setattr(self, f'up_{r}_{c}', UpSamplingBlock(ch_in, ch_out))
+                self.up_blocks[r][c] = eval(f'self.up_{r}_{c}')
+                
         self.lateral_final = LateralBlock(n_chs[0], n_ch_final)
                                     
     def forward(self, x):
@@ -35,9 +47,9 @@ class GridNet(nn.Module):
                     outputs[row+1][col] += self.down_blocks[row][col](outputs[row][col])
             # upsamlping
             else:
-                # row : descending order
-                for row in reversed(range(self.n_row-1)):
+                for row in reversed(range(self.n_row-1)): # row : descending order
                     outputs[row][col] += self.up_blocks[row][col-int(self.n_col/2)](outputs[row+1][col])
+            # lateral stream
             if col < self.n_col-1:
                 for row in range(self.n_row):
                     outputs[row][col+1] = self.lateral_blocks[row][col](outputs[row][col])
