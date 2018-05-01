@@ -37,21 +37,68 @@ class GridNet(nn.Module):
                                     
     def forward(self, x):
 
-        outputs = [[0 for _ in range(self.n_col)] for _ in range(self.n_row)]
-        outputs[0][0] = self.lateral_init(x)
+        # outputs = [[0 for _ in range(self.n_col)] for _ in range(self.n_row)]
+        # outputs[0][0] = self.lateral_init(x)
         
-        for col in range(self.n_col):
-            # downsampling
-            if col < int(self.n_col/2):
-                for row in range(self.n_row-1):
-                    outputs[row+1][col] += self.down_blocks[row][col](outputs[row][col])
-            # upsamlping
-            else:
-                for row in reversed(range(self.n_row-1)): # row : descending order
-                    outputs[row][col] += self.up_blocks[row][col-int(self.n_col/2)](outputs[row+1][col])
-            # lateral stream
-            if col < self.n_col-1:
-                for row in range(self.n_row):
-                    outputs[row][col+1] = self.lateral_blocks[row][col](outputs[row][col])
+        # for col in range(self.n_col):
+        #     # downsampling
+        #     if col < int(self.n_col/2):
+        #         for row in range(self.n_row-1):
+        #             outputs[row+1][col] += self.down_blocks[row][col](outputs[row][col])
+        #     # upsamlping
+        #     else:
+        #         for row in reversed(range(self.n_row-1)): # row : descending order
+        #             outputs[row][col] += self.up_blocks[row][col-int(self.n_col/2)](outputs[row+1][col])
+        #     # lateral stream
+        #     if col < self.n_col-1:
+        #         for row in range(self.n_row):
+        #             outputs[row][col+1] = self.lateral_blocks[row][col](outputs[row][col])
 
-        return self.lateral_final(outputs[0][-1])
+        state_00 = self.lateral_init(x)
+        state_10 = self.down_0_0(state_00)
+        state_20 = self.down_1_0(state_10)
+
+        state_01 = self.lateral_0_0(state_00)
+        state_11 = self.down_0_1(state_01) + self.lateral_1_0(state_10)
+        state_21 = self.down_1_1(state_11) + self.lateral_2_0(state_20)
+
+        state_02 = self.lateral_0_1(state_01)
+        state_12 = self.down_0_2(state_02) + self.lateral_1_1(state_11)
+        state_22 = self.down_1_2(state_12) + self.lateral_2_1(state_21)
+
+        state_23 = self.lateral_2_2(state_22)
+        state_13 = self.up_1_0(state_23) + self.lateral_1_2(state_12)
+        state_03 = self.up_0_0(state_13) + self.lateral_0_2(state_02)
+
+        state_24 = self.lateral_2_3(state_23)
+        state_14 = self.up_1_1(state_24) + self.lateral_1_3(state_13)
+        state_04 = self.up_0_1(state_14) + self.lateral_0_3(state_03)
+
+        state_25 = self.lateral_2_4(state_24)
+        state_15 = self.up_1_2(state_25) + self.lateral_1_4(state_14)
+        state_05 = self.up_0_2(state_15) + self.lateral_0_4(state_04)
+
+        return self.lateral_final(state_05)
+        
+        # return self.lateral_final(outputs[0][-1])
+
+    # def forwardall(self, x):
+
+    #     outputs = [[0 for _ in range(self.n_col)] for _ in range(self.n_row)]
+    #     outputs[0][0] = self.lateral_init(x)
+        
+    #     for col in range(self.n_col):
+    #         # downsampling
+    #         if col < int(self.n_col/2):
+    #             for row in range(self.n_row-1):
+    #                 outputs[row+1][col] += self.down_blocks[row][col](outputs[row][col])
+    #         # upsamlping
+    #         else:
+    #             for row in reversed(range(self.n_row-1)): # row : descending order
+    #                 outputs[row][col] += self.up_blocks[row][col-int(self.n_col/2)](outputs[row+1][col])
+    #         # lateral stream
+    #         if col < self.n_col-1:
+    #             for row in range(self.n_row):
+    #                 outputs[row][col+1] = self.lateral_blocks[row][col](outputs[row][col])
+
+    #     return outputs

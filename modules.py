@@ -41,7 +41,7 @@ class UpSamplingBlock(nn.Module):
     def __init__(self, ch_in, ch_out):
         super().__init__()
         self.f = nn.Sequential(
-            nn.UpsamplingBilinear2d(scale_factor = 2),
+            nn.Upsample(scale_factor = 2, mode = 'bilinear', align_corners = False),
             nn.PReLU(),
             nn.Conv2d(ch_in, ch_out, kernel_size = 3, padding = 1),
             nn.PReLU(),
