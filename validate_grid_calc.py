@@ -1,4 +1,5 @@
 import numpy as np
+import sys
 
 def add1(x): # analogous to lateral block
     return x+1
@@ -39,3 +40,13 @@ class ToyGrid(object):
                     status[row, col+1] = self.add_blocks[row][col](status[row, col])
 
         return status
+
+if __name__ == '__main__':
+    args = [3, 6] # default n_row and n_col
+    assert len(sys.argv) <= 3, 'too much (>2) argument has passed'
+    for i in range(1, len(sys.argv)):
+        args[i-1] = sys.argv[i]
+    print(f'Build toy-grid with {args[0]}rows, {args[1]}cols')
+    
+    toy = ToyGrid(*args)
+    print(toy.forward())
