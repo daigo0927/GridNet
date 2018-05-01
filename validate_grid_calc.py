@@ -45,7 +45,7 @@ if __name__ == '__main__':
     args = [3, 6] # default n_row and n_col
     assert len(sys.argv) <= 3, 'too much (>2) argument has passed'
     for i in range(1, len(sys.argv)):
-        args[i-1] = sys.argv[i]
+        args[i-1] = int(sys.argv[i])
     print(f'Build toy-grid with {args[0]}rows, {args[1]}cols')
     
     toy = ToyGrid(*args)
