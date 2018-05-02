@@ -28,7 +28,10 @@ def cross_entropy2d(input, target, weight=None, size_average=True):
     loss = F.nll_loss(log_p, target, ignore_index=250,
                       weight=weight, size_average=False)
     if size_average:
-        loss /= mask.data.sum()
+        if mask.is_cuda:
+            loss /= mask.data.sum().type(torch.cuda.FloatTensor)
+        else:
+            loss /= mask.data.sum().type(torch.FloatTensor)
     return loss
 
 def bootstrapped_cross_entropy2d(input, target, K, weight=None, size_average=True):

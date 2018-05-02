@@ -6,6 +6,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torchvision.models as models
 
+from torch.autograd import Variable
 from torch.utils import data
 from tqdm import tqdm
 
@@ -16,6 +17,8 @@ from ptsemseg.metrics import runningScore
 from ptsemseg.loss import *
 from ptsemseg.augmentations import *
 
+import pdb
+
 def train(args):
 
     data_aug = Compose([RandomRotate(10),
@@ -23,19 +26,20 @@ def train(args):
 
     # Setup dataloader
     data_loader = get_loader(args.dataset)
-    data_path = get_data_path(args.dataset)
+    # data_path = get_data_path(args.dataset)
+    data_path = args.dataset_dir
     t_loader = data_loader(data_path, is_transform = True,
                            img_size = (args.img_rows, args.img_cols),
-                           augumentations = data.aug, img_norm = args.img_norm)
+                           augmentations = data_aug, img_norm = args.img_norm)
     v_loader = data_loader(data_path, is_transform = True,
-                           split = 'val', img_size = (args.img_rows, args.img_cols),
+                           split = 'validation', img_size = (args.img_rows, args.img_cols),
                            img_norm = args.img_norm)
 
     n_classes = t_loader.n_classes
     trainloader = data.DataLoader(t_loader, batch_size = args.batch_size,
-                                  num_worker = 8, shuffle = True)
+                                  num_workers = args.num_workers, shuffle = True)
     valloader = data.DataLoader(v_loader, batch_size = args.batch_size,
-                                num_worker = 8)
+                                num_workers = args.num_workers)
 
     # Setup metrics
     running_metrics = runningScore(n_classes)
@@ -51,21 +55,21 @@ def train(args):
                                            legend = ['Loss']))
 
     # Setup model
-    model = GridNet(n_ch_init = 3, n_ch_final = n_classes)
-    model = torch.nn.DataParallel(model,
-                                  device_ids = range(torch.cuda.device_count()))
+    model = GridNet(in_chs = 3, out_chs = n_classes)
+    # model = torch.nn.DataParallel(model,
+    #                               device_ids = range(torch.cuda.device_count()))
     if torch.cuda.is_available():
-        model.cuda()
+        model.to(args.device)
         
-    if hasattr(model.module, 'optimizer'):
-        optimizer = model.module.optimizer
+    if hasattr(model.modules, 'optimizer'):
+        optimizer = model.modules.optimizer
     else:
         optimizer = torch.optim.SGD(model.parameters(), lr = args.l_rate,
                                     momentum = 0.99, weight_decay = 5e-4)
 
-    if hasattr(model.module, 'loss'):
+    if hasattr(model.modules, 'loss'):
         print('Using custom loss')
-        loss_fn = model.module.loss
+        loss_fn = model.modules.loss
     else:
         loss_fn = cross_entropy2d
 
@@ -81,13 +85,20 @@ def train(args):
 
     best_iou = -100.
     for epoch in range(args.n_epoch):
+        
         model.train()
         for i, (images, labels) in enumerate(trainloader):
+            # if torch.cuda.is_available():
+            #     images = Variable(images.cuda())
+            #     labels = Variable(labels.cuda())
             images = images.to(args.device)
+            # labels = labels.type(torch.FloatTensor).to(args.device)
             labels = labels.to(args.device)
 
             optimizer.zero_grad()
             outputs = model(images)
+
+            # pdb.set_trace()
 
             loss = loss_fn(input = outputs, target = labels)
 
@@ -129,6 +140,8 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Hyperparams')
     parser.add_argument('--dataset', nargs='?', type=str, default='mit_sceneparsing_benchmark',
                         help = 'Dataset to use [\'pascal, camvid, ade20k etc\']')
+    parser.add_argument('--dataset_dir', required = True, type = str,
+                        help = 'Directory containing target dataset')
     parser.add_argument('--img_rows', nargs='?', type=int, default=256,
                         help = 'Height of the input')
     parser.add_argument('-img_cols', nargs='?', type=int, default=256,
@@ -136,6 +149,8 @@ if __name__ == '__main__':
 
     parser.add_argument('--device', type = str, default = 'cuda',
                         help = 'Utilize device cuda (default) or cpu')
+    parser.add_argument('--num_workers', type = int, default = 1,
+                        help = '# of worker used for data loading')
 
     parser.add_argument('--img_norm', dest = 'img_norm', action = 'store_true',
                         help = 'Enable input images scales normalization [0, 1] | True by default')
@@ -145,7 +160,7 @@ if __name__ == '__main__':
     
     parser.add_argument('--n_epoch', nargs = '?', type = int, default = 100,
                         help = '# of epochs')
-    parser.add_argument('--batch_size', nargs = '?', type = int, default = 1,
+    parser.add_argument('--batch_size', nargs = '?', type = int, default = 8,
                         help = 'Batch size')
     parser.add_argument('--l_rate', nargs = '?', type = float, default = 1e-5,
                         help = 'Learning rate [1-e5]')
