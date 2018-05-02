@@ -141,7 +141,7 @@ if __name__ == '__main__':
                         help = 'Enable input images scales normalization [0, 1] | True by default')
     parser.add_argument('--no-img_norm', dest = 'img_norm', action = 'store_false',
                         help = 'Disable input images scales normalization [0, 1] | True by Default')
-    parser.set_default(img_norm = True)
+    parser.set_defaults(img_norm = True)
     
     parser.add_argument('--n_epoch', nargs = '?', type = int, default = 100,
                         help = '# of epochs')
@@ -156,7 +156,7 @@ if __name__ == '__main__':
                         help = 'Enable visualizaion(s) on visdom | False by default')
     parser.add_argument('--no-visdom', dest = 'visdom', action = 'store_false',
                         help = 'Disable visualization(s) in visdom | False by default')
-    parser.set_default(visdom = False)
+    parser.set_defaults(visdom = False)
 
     args = parser.parse_args()
     train(args)
