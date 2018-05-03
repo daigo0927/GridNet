@@ -36,10 +36,10 @@ def train(args):
                            img_norm = args.img_norm)
 
     n_classes = t_loader.n_classes
-    trainloader = data.DataLoader(t_loader, batch_size = args.batch_size,
-                                  num_workers = args.num_workers, shuffle = True)
-    valloader = data.DataLoader(v_loader, batch_size = args.batch_size,
-                                num_workers = args.num_workers)
+    trainloader = data.DataLoader(t_loader, batch_size = args.batch_size, shuffle = True)
+                                  # num_workers = args.num_workers, shuffle = True)
+    valloader = data.DataLoader(v_loader, batch_size = args.batch_size)
+                                # num_workers = args.num_workers)
 
     # Setup metrics
     running_metrics = runningScore(n_classes)
@@ -54,12 +54,12 @@ def train(args):
                                            title = 'Training loss',
                                            legend = ['Loss']))
 
+    gpu_id = int(input('input utilize gpu id (-1:cpu) : '))
+    device = torch.device(f'cuda:{gpu_id}' if gpu_id >= 0 else 'cpu')
+
     # Setup model
     model = GridNet(in_chs = 3, out_chs = n_classes)
-    # model = torch.nn.DataParallel(model,
-    #                               device_ids = range(torch.cuda.device_count()))
-    if torch.cuda.is_available():
-        model.to(args.device)
+    model.to(device)
         
     if hasattr(model.modules, 'optimizer'):
         optimizer = model.modules.optimizer
@@ -67,11 +67,8 @@ def train(args):
         optimizer = torch.optim.SGD(model.parameters(), lr = args.l_rate,
                                     momentum = 0.99, weight_decay = 5e-4)
 
-    if hasattr(model.modules, 'loss'):
-        print('Using custom loss')
-        loss_fn = model.modules.loss
-    else:
-        loss_fn = cross_entropy2d
+    criterion = nn.NLLLoss()
+    criterion.to(device)
 
     if args.resume is not None:
         if os.path.isfile(args.resume):
@@ -85,29 +82,31 @@ def train(args):
 
     best_iou = -100.
     for epoch in range(args.n_epoch):
+        print(f'epoch : {epoch} start')
         
         model.train()
         for i, (images, labels) in enumerate(trainloader):
-            # if torch.cuda.is_available():
-            #     images = Variable(images.cuda())
-            #     labels = Variable(labels.cuda())
-            images = images.to(args.device)
-            # labels = labels.type(torch.FloatTensor).to(args.device)
-            labels = labels.to(args.device)
+            print(f'epoch : {epoch}, num_batch : {i} processing')
+            images, labels = images.to(device), labels.to(device)
 
             optimizer.zero_grad()
+            print('infering...')
+
             outputs = model(images)
 
+
             # pdb.set_trace()
+            print('loss calculating')
+            loss = criterion(outputs, labels)
 
-            loss = loss_fn(input = outputs, target = labels)
-
+            print('back propagating')
             loss.backward()
+            print('parameter update')
             optimizer.step()
 
             if args.visdom:
                 vis.line(X = torch.ones((1, 1)).cpu() * i,
-                         Y = orch.Tensor([loss.data[0]]).unsqueeze(0).cpu(),
+                         Y = torch.Tensor([loss.data[0]]).unsqueeze(0).cpu(),
                          win = loss_window,
                          update = 'append')
 
@@ -116,16 +115,15 @@ def train(args):
 
             model.eval()
             for i_val, (images_val, labels_val) in tqdm(enumerate(valloader)):
-                images_val = images_val.to(args.device)
-                labels_val = labels_val.to(args.device)
+                images_val, labels_val = images_val.to(device), labels_val.to(device)
 
                 outputs = model(images_val)
                 pred = outputs.data.max(1)[1].cpu().numpy()
                 gt = labels_val.data.cpu().numpy()
                 running_metrics.update(gt, pred)
 
-                score, class_iou = running_metrics.get_score()
-                for k, v in score.item():
+                score, class_iou = running_metrics.get_scores()
+                for k, v in score.items():
                     print(k, v)
                 running_metrics.reset()
 
@@ -144,13 +142,8 @@ if __name__ == '__main__':
                         help = 'Directory containing target dataset')
     parser.add_argument('--img_rows', nargs='?', type=int, default=256,
                         help = 'Height of the input')
-    parser.add_argument('-img_cols', nargs='?', type=int, default=256,
+    parser.add_argument('--img_cols', nargs='?', type=int, default=256,
                         help = 'Width of input')
-
-    parser.add_argument('--device', type = str, default = 'cuda',
-                        help = 'Utilize device cuda (default) or cpu')
-    parser.add_argument('--num_workers', type = int, default = 1,
-                        help = '# of worker used for data loading')
 
     parser.add_argument('--img_norm', dest = 'img_norm', action = 'store_true',
                         help = 'Enable input images scales normalization [0, 1] | True by default')
@@ -174,6 +167,8 @@ if __name__ == '__main__':
     parser.set_defaults(visdom = False)
 
     args = parser.parse_args()
+    for key, item in vars(args).items():
+        print(f'{key} : {item}')
     train(args)
 
 
